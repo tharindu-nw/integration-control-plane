@@ -133,7 +133,7 @@ service /auth on httpListener {
                 log:printInfo(string `User ${username} authenticated but not found in users table, creating user record`);
 
                 // If the auth backend signals that this user should be a super-admin
-                // (e.g. because of an LDAP admin role), add them to the built-in
+                // (e.g. because of an external admin role), add them to the built-in
                 // "Super Admins" group on first login.
                 string[] initialGroupIds = [];
                 if authResult?.isSuperAdmin == true {
@@ -144,7 +144,7 @@ service /auth on httpListener {
                         return utils:createInternalServerError("Could not resolve Super Admins group");
                     }
                     initialGroupIds = [superAdminsGroupId];
-                    log:printInfo("Assigning new LDAP user to Super Admins group on first login", username = username);
+                    log:printInfo("Assigning new user to Super Admins group on first login", username = username);
                 }
 
                 json|error? createResult = storage:createUserV2(userId, username, displayName, initialGroupIds);

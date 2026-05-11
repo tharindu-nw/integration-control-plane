@@ -22,7 +22,7 @@ import ballerina/uuid;
 
 // Helper function to get Project Admin role ID
 isolated function getProjectAdminRoleId() returns string|error {
-    sql:ParameterizedQuery query = `SELECT role_id FROM roles_v2 WHERE role_name = 'Project Admin'`;
+    sql:ParameterizedQuery query = `SELECT role_id FROM roles_v2 WHERE role_name = 'Project Admin' ORDER BY role_id`;
     query = appendLimitClause(query, 1);
 
     stream<record {|string role_id;|}, sql:Error?> roleStream = dbClient->query(query);
@@ -391,6 +391,19 @@ public isolated function deleteProject(string projectId) returns error? {
             if groupDeleteResult is sql:Error {
                 fail groupDeleteResult;
             }
+
+            // Explicitly remove all remaining group_role_mapping rows scoped to this project.
+            // On MySQL/H2/PostgreSQL these would be cascade-deleted when the project row is removed,
+            // but MSSQL defines fk_grp_role_project as ON DELETE NO ACTION (to avoid multiple cascade
+            // path errors), so it does not cascade and instead leaves orphaned records silently.
+            // Deleting them here makes the cleanup correct and explicit on all database engines.
+            sql:ExecutionResult|sql:Error roleMappingDeleteResult = dbClient->execute(
+                `DELETE FROM group_role_mapping WHERE project_uuid = ${projectId}`
+            );
+            if roleMappingDeleteResult is sql:Error {
+                fail roleMappingDeleteResult;
+            }
+            log:printInfo(string `Removed all role mappings scoped to project`, projectId = projectId);
 
             sql:ExecutionResult|sql:Error projectDeleteResult = dbClient->execute(
                 `DELETE FROM projects WHERE project_id = ${projectId}`

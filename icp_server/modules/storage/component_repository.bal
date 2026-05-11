@@ -301,6 +301,17 @@ public isolated function deleteComponent(string componentId) returns error? {
         return error("An unexpected error occurred. Please contact your administrator.", cmdResult);
     }
 
+    // Explicitly delete group_role_mapping rows scoped to this integration (component).
+    // Required for MSSQL where fk_grp_role_integration is ON DELETE NO ACTION (multiple
+    // cascade path restriction); safe to do unconditionally for all other dialects as well.
+    sql:ParameterizedQuery deleteRoleMappingQuery = `DELETE FROM group_role_mapping WHERE integration_uuid = ${componentId}`;
+    var roleMappingResult = dbClient->execute(deleteRoleMappingQuery);
+    if roleMappingResult is sql:Error {
+        log:printError(string `Failed to delete group role mappings for component ${componentId}`, 'error = roleMappingResult);
+        return error("An unexpected error occurred. Please contact your administrator.", roleMappingResult);
+    }
+    log:printInfo(string `Removed all role mappings scoped to component`, componentId = componentId);
+
     sql:ParameterizedQuery deleteQuery = `DELETE FROM components WHERE component_id = ${componentId}`;
     var result = dbClient->execute(deleteQuery);
     if result is sql:Error {

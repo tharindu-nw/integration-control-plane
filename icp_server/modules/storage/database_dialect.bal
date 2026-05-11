@@ -153,11 +153,12 @@ public isolated function getLimitClause(int rowCount) returns string {
 }
 
 // Append database-specific LIMIT clause to a query
+// Note: MSSQL requires an ORDER BY clause in the query before calling this function.
 public isolated function appendLimitClause(sql:ParameterizedQuery query, int rowCount) returns sql:ParameterizedQuery {
     if dbType == MSSQL {
-        return sql:queryConcat(query, ` OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY`);
+        return sql:queryConcat(query, ` OFFSET 0 ROWS FETCH NEXT ${rowCount} ROWS ONLY`);
     } else {
-        return sql:queryConcat(query, ` LIMIT 1`);
+        return sql:queryConcat(query, ` LIMIT ${rowCount}`);
     }
 }
 
