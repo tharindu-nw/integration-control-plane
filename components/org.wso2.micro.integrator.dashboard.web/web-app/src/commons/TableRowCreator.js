@@ -164,7 +164,7 @@ export default function TableRowCreator(props) {
             case 'isAdmin':
                 return <TableCell>{data.details.isAdmin ? <AdminIcon style={{color:"green"}}/> : <NonAdminIcon style={{color:"red"}}/>}</TableCell>
             case 'action':
-                return <TableCell><UserDeleteAction userId={data.userId} retrieveData={retrieveData}/></TableCell>
+                return <TableCell><UserDeleteAction userId={data.userId} isReadOnly={data.details.isReadOnly} retrieveData={retrieveData}/></TableCell>
 
             // roles page
             case 'roleName':
@@ -491,7 +491,7 @@ function LogConfigLevelDropDown(props) {
 }
 
 function UserDeleteAction(props) {
-    const {userId, retrieveData} = props;
+    const {userId, isReadOnly, retrieveData} = props;
     const loggedInUser = AuthManager.getUser().username;
     const superAdmin = useSelector(state => state.superAdmin);
     const classes = useStyles();
@@ -556,11 +556,11 @@ function UserDeleteAction(props) {
     }
 
     return <div><tr><td><enabledDelete/>
-        {loggedInUser === userId || superAdmin === userId ? <Box display='flex' alignItems='center' className={classes.disabledButton}>
+        {loggedInUser === userId || superAdmin === userId || isReadOnly ? <Box display='flex' alignItems='center' className={classes.disabledButton}>
                             <DeleteIcon color="disabled"/>
                             Delete
                         </Box> : <Box display='flex' alignItems='center'>
-                                <DeleteIcon onClick={() => confirmDelete()}/> 
+                                <DeleteIcon onClick={() => confirmDelete()}/>
                                 Delete
                             </Box>}
         

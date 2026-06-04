@@ -22,6 +22,7 @@ import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.impl.builder.StAXOMBuilder;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.wso2.dashboard.security.user.core.common.DataHolder;
 import org.wso2.micro.integrator.security.user.api.RealmConfiguration;
 import org.wso2.micro.integrator.security.user.core.UserCoreConstants;
 import org.wso2.micro.integrator.security.user.core.UserStoreException;
@@ -146,6 +147,8 @@ public class RealmConfigXMLProcessor {
                 reservedRoles = rolesStr.split(";");
             }
         }
+
+        DataHolder.getInstance().setAllowedLoginRoles(parseAllowedLoginRoles(mainConfig));
 
         OMElement restrictedDomainsElm = mainConfig.getFirstChildWithName(new QName("RestrictedDomainsForSelfSignUp"));
         String[] restrictedDomains = new String[0];
@@ -273,6 +276,26 @@ public class RealmConfigXMLProcessor {
         }
 
         return primaryConfig;
+    }
+
+    private String[] parseAllowedLoginRoles(OMElement mainConfig) {
+        OMElement elm = mainConfig.getFirstChildWithName(new QName("AllowedLoginRoles"));
+        if (elm == null || elm.getText() == null || elm.getText().trim().isEmpty()) {
+            return new String[0];
+        }
+        String raw = elm.getText().trim();
+        String[] parts = raw.split("[,;]");
+        java.util.List<String> entries = new java.util.ArrayList<>(parts.length);
+        for (String part : parts) {
+            if (part == null) {
+                continue;
+            }
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                entries.add(trimmed);
+            }
+        }
+        return entries.toArray(new String[0]);
     }
 
     private String constructDatabaseURL(String url) {

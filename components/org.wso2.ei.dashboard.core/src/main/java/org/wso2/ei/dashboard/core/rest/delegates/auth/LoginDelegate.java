@@ -24,6 +24,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.wso2.dashboard.security.user.core.UserStoreManagerUtils;
 import org.wso2.dashboard.security.user.core.common.DashboardUserStoreException;
+import org.wso2.dashboard.security.user.core.common.LoginAuthorizationException;
 import org.wso2.ei.dashboard.core.commons.Constants;
 import org.wso2.ei.dashboard.core.commons.auth.JwtUtil;
 import org.wso2.ei.dashboard.core.commons.auth.TokenCache;
@@ -42,16 +43,20 @@ public class LoginDelegate {
 
     public Response authenticateUser(String username, String password) {
         try {
-            boolean isAuthenticated = UserStoreManagerUtils.getUserStoreManager().authenticate(username, password);
-            if (!isAuthenticated) {
-                return Response.status(Status.UNAUTHORIZED.getStatusCode(), Constants.LOGIN_ERROR).build();
+            String resolvedUsername = UserStoreManagerUtils.authenticate(username, password);
+            if (!UserStoreManagerUtils.isLoginAllowed(resolvedUsername)) {
+                logger.warn(String.format(
+                        "User %s denied dashboard access: no allowed login role.", resolvedUsername));
+                throw new LoginAuthorizationException(Constants.LOGIN_NOT_AUTHORIZED);
             }
-            logger.info(String.format("User %s logged in successfully", username));
-            String scope = UserStoreManagerUtils.isAdminUser(username) ? "admin" : "default";
-            String accessToken = JwtUtil.generateToken(username, scope);
+            logger.info(String.format("User %s logged in successfully", resolvedUsername));
+            String scope = UserStoreManagerUtils.isAdminUser(resolvedUsername) ? "admin" : "default";
+            String accessToken = JwtUtil.generateToken(resolvedUsername, scope);
             storeTokenInCache(accessToken);
-            return Response.ok(getUserInfo(username, scope)).header(Constants.COOKIE_HEADER,
+            return Response.ok(getUserInfo(resolvedUsername, scope)).header(Constants.COOKIE_HEADER,
                     getTokenCookieHeader(accessToken, NewCookie.DEFAULT_MAX_AGE)).build();
+        } catch (LoginAuthorizationException e) {
+            return Response.status(Status.FORBIDDEN.getStatusCode(), Constants.LOGIN_NOT_AUTHORIZED).build();
         } catch (DashboardUserStoreException e) {
             return Response.status(Status.UNAUTHORIZED.getStatusCode(), Constants.LOGIN_ERROR).build();
         } catch (Exception e) {

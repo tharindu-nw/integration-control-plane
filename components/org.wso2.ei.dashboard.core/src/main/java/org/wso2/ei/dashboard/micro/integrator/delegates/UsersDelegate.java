@@ -55,6 +55,7 @@ import java.util.Collections;
 import java.util.Objects;
 
 import static org.wso2.ei.dashboard.core.commons.Constants.*;
+import static org.wso2.dashboard.security.user.core.UserStoreManagerUtils.isUserStoreReadOnly;
 
 /**
  * Delegate class to handle requests from users page.
@@ -151,7 +152,10 @@ class IcpUsersDelegate extends UsersDelegate {
         UserStoreManager manager = UserStoreManagerUtils.getUserStoreManager();
         synchronized (this) {
             String[] roleList = request.isIsAdmin() ? new String[]{"admin"} : new String[]{};
-            manager.addUser(request.getUserId(), request.getPassword(), roleList, null, null, false);
+            String userId = StringUtils.isEmpty(request.getDomain())
+                    ? request.getUserId()
+                    : request.getDomain() + DOMAIN_SEPARATOR + request.getUserId();
+            manager.addUser(userId, request.getPassword(), roleList, null, null, false);
         }
         return new Ack(SUCCESS_STATUS);
     }
@@ -268,6 +272,14 @@ class IcpUsersDelegate extends UsersDelegate {
             JsonObject userDetails = new JsonObject();
             userDetails.addProperty(USER_ID, user.getUserId());
             userDetails.addProperty(IS_ADMIN, UserStoreManagerUtils.isAdminUser(user.getUserId()));
+            boolean isReadOnly;
+            try {
+                isReadOnly = isUserStoreReadOnly(user.getUserId());
+            } catch (UserStoreException e) {
+                log.warn("Could not determine read-only status for user " + user.getUserId() + "; defaulting to false", e);
+                isReadOnly = false;
+            }
+            userDetails.addProperty(IS_READ_ONLY, isReadOnly);
 
             JsonArray rolesArray = new JsonArray();
             Arrays.stream(roles).forEach(rolesArray::add);
@@ -389,7 +401,20 @@ class MiUsersDelegate extends UsersDelegate {
         String accessToken = DataManagerSingleton.getDataManager().getAccessToken(groupId, nodeId);
         try (CloseableHttpResponse userDetailResponse = Utils.doGet(groupId, nodeId, accessToken, getUsersDetailsUrl)) {
             String userDetail = HttpUtils.getStringResponse(userDetailResponse);
-            usersInner.setDetails(userDetail);
+            boolean isReadOnly = false;
+            try {
+                isReadOnly = isUserStoreReadOnly(userId);
+            } catch (UserStoreException e) {
+                log.warn("Could not determine read-only status for user " + userId + ", defaulting to writable", e);
+            }
+            try {
+                JsonObject detailsJson = new Gson().fromJson(userDetail, JsonObject.class);
+                detailsJson.addProperty(IS_READ_ONLY, isReadOnly);
+                usersInner.setDetails(detailsJson.toString());
+            } catch (Exception e) {
+                log.warn("Could not enrich user details for user " + userId + ", returning as-is", e);
+                usersInner.setDetails(userDetail);
+            }
             return usersInner;
         } catch (IOException e) {
             throw new ManagementApiException("Error while retrieving user details", 500);

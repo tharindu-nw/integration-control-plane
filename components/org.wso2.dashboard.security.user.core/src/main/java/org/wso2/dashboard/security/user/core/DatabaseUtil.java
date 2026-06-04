@@ -30,6 +30,8 @@ import org.wso2.micro.integrator.security.user.core.UserStoreException;
 import org.wso2.micro.integrator.security.user.core.jdbc.JDBCRealmConstants;
 import org.wso2.micro.integrator.security.user.core.util.UserCoreUtil;
 
+import static org.wso2.dashboard.security.user.core.UserStoreConstants.RealmConfig.PROPERTY_DOMAIN_NAME;
+
 import javax.naming.InitialContext;
 import javax.sql.DataSource;
 
@@ -47,19 +49,25 @@ public class DatabaseUtil {
     private static final int DEFAULT_MAX_WAIT = 1000 * 60;
     private static final int DEFAULT_MIN_IDLE = 5;
     private static final int DEFAULT_MAX_IDLE = 6;
+    private static final String REALM_POOL_NAME = "WSO2CarbonDB";
+    private static final String USER_STORE_POOL_NAME = "WSO2UserStoreDB";
     private static Log log = LogFactory.getLog(org.wso2.micro.integrator.security.user.core.util.DatabaseUtil.class);
     private static DataSource dataSource = null;
     private static final String VALIDATION_INTERVAL = "validationInterval";
     private static final long DEFAULT_VALIDATION_INTERVAL = 30000;
 
     /**
-     * Gets a database pooling connection. If a pool is not created this will create a connection pool.
+     * Gets a database pooling connection. If a pool is not created this will create
+     * a connection pool.
      *
-     * @param realmConfig The realm configuration. This includes necessary configuration parameters needed to
+     * @param realmConfig The realm configuration. This includes necessary
+     *                    configuration parameters needed to
      *                    create a database pool.
      *                    <p/>
-     *                    NOTE : If we use this there will be a single connection for all tenants. But there might be a requirement
-     *                    where different tenants want to connect to multiple data sources. In that case we need to create
+     *                    NOTE : If we use this there will be a single connection
+     *                    for all tenants. But there might be a requirement
+     *                    where different tenants want to connect to multiple data
+     *                    sources. In that case we need to create
      *                    a dataSource for each tenant.
      * @return A database pool.
      */
@@ -76,6 +84,9 @@ public class DatabaseUtil {
 
         String dataSourceName = realmConfig.getRealmProperty(JDBCRealmConstants.DATASOURCE);
         if (dataSourceName != null) {
+            if (Boolean.parseBoolean(realmConfig.getRealmProperty(JDBCRealmConstants.JMX_ENABLED))) {
+                log.warn("jmxEnabled has no effect on JNDI-backed realm datasources.");
+            }
             dataSourceName = resolveSystemProperty(dataSourceName);
             return lookupDataSource(dataSourceName);
         }
@@ -86,7 +97,9 @@ public class DatabaseUtil {
         config.setUsername(realmConfig.getRealmProperty(JDBCRealmConstants.USER_NAME));
         config.setPassword(realmConfig.getRealmProperty(JDBCRealmConstants.PASSWORD));
 
-        HikariDataSource dataSource = new HikariDataSource(config);
+        configureJmx(config, REALM_POOL_NAME, realmConfig.getRealmProperty(JDBCRealmConstants.JMX_ENABLED));
+
+        dataSource = new HikariDataSource(config);
         return dataSource;
     }
 
@@ -104,7 +117,15 @@ public class DatabaseUtil {
         try {
             return (DataSource) InitialContext.doLookup(dataSourceName);
         } catch (Exception e) {
-            throw new RuntimeException("Error in looking up data source: " + e.getMessage(), e);
+            String errorMessage = "Error in looking up data source: " + dataSourceName + ". ";
+            if (e instanceof javax.naming.NoInitialContextException) {
+                errorMessage += "JNDI Initial Context is not configured. If you're using LDAP for authentication " +
+                        "without internal roles, you can ignore this error. Otherwise, ensure " +
+                        "java.naming.factory.initial is properly configured.";
+            } else {
+                errorMessage += e.getMessage();
+            }
+            throw new RuntimeException(errorMessage, e);
         }
     }
 
@@ -112,6 +133,9 @@ public class DatabaseUtil {
 
         String dataSourceName = realmConfig.getUserStoreProperty(JDBCRealmConstants.DATASOURCE);
         if (dataSourceName != null) {
+            if (Boolean.parseBoolean(realmConfig.getUserStoreProperty(JDBCRealmConstants.JMX_ENABLED))) {
+                log.warn("jmxEnabled has no effect on JNDI-backed user store datasources.");
+            }
             dataSourceName = resolveSystemProperty(dataSourceName);
             return lookupDataSource(dataSourceName);
         }
@@ -159,6 +183,19 @@ public class DatabaseUtil {
         } else {
             config.setConnectionTimeout(DEFAULT_MAX_WAIT);
         }
+
+        String domainName = realmConfig.getUserStoreProperty(PROPERTY_DOMAIN_NAME);
+        String poolName = StringUtils.isNotBlank(domainName)
+                ? USER_STORE_POOL_NAME + "-" + domainName
+                : USER_STORE_POOL_NAME;
+        configureJmx(config, poolName, realmConfig.getUserStoreProperty(JDBCRealmConstants.JMX_ENABLED));
+    }
+
+    private static void configureJmx(HikariConfig config, String poolName, String jmxEnabled) {
+        if (Boolean.parseBoolean(jmxEnabled)) {
+            config.setPoolName(poolName);
+            config.setRegisterMbeans(true);
+        }
     }
 
     public static String[] getStringValuesFromDatabase(Connection dbConnection, String sqlStmt, Object... params)
@@ -172,9 +209,10 @@ public class DatabaseUtil {
                 for (int i = 0; i < params.length; i++) {
                     Object param = params[i];
                     if (param == null) {
-                        //allow to send null data since null allowed values can be in the table. eg: domain name
+                        // allow to send null data since null allowed values can be in the table. eg:
+                        // domain name
                         prepStmt.setString(i + 1, null);
-                        //throw new DashboardUserStoreException("Null data provided.");
+                        // throw new DashboardUserStoreException("Null data provided.");
                     } else if (param instanceof String) {
                         prepStmt.setString(i + 1, (String) param);
                     } else if (param instanceof Integer) {
@@ -203,8 +241,9 @@ public class DatabaseUtil {
         }
     }
 
-    /*This retrieves two parameters, combines them and send back*/
-    public static String[] getStringValuesFromDatabaseForInternalRoles(Connection dbConnection, String sqlStmt, Object... params)
+    /* This retrieves two parameters, combines them and send back */
+    public static String[] getStringValuesFromDatabaseForInternalRoles(Connection dbConnection, String sqlStmt,
+            Object... params)
             throws UserStoreException {
         String[] values = new String[0];
         PreparedStatement prepStmt = null;
@@ -249,7 +288,7 @@ public class DatabaseUtil {
     }
 
     public static int getIntegerValueFromDatabase(Connection dbConnection, String sqlStmt,
-                                                  Object... params) throws UserStoreException {
+            Object... params) throws UserStoreException {
         PreparedStatement prepStmt = null;
         ResultSet rs = null;
         int value = -1;
@@ -284,7 +323,7 @@ public class DatabaseUtil {
     }
 
     public static void udpateUserRoleMappingInBatchModeForInternalRoles(Connection dbConnection,
-                                                                        String sqlStmt, String primaryDomain, Object... params) throws UserStoreException {
+            String sqlStmt, String primaryDomain, Object... params) throws UserStoreException {
         PreparedStatement prepStmt = null;
         boolean localConnection = false;
         try {
@@ -308,18 +347,18 @@ public class DatabaseUtil {
                 String[] values = (String[]) params[batchParamIndex];
                 for (String value : values) {
                     String strParam = (String) value;
-                    //add domain if not set
+                    // add domain if not set
                     strParam = UserCoreUtil.addDomainToName(strParam, primaryDomain);
-                    //get domain from name
+                    // get domain from name
                     String domainParam = UserCoreUtil.extractDomainFromName(strParam);
                     if (domainParam != null) {
                         domainParam = domainParam.toUpperCase();
                     }
-                    //set domain to sql
+                    // set domain to sql
                     prepStmt.setString(params.length + 1, domainParam);
-                    //remove domain before persisting
+                    // remove domain before persisting
                     String nameWithoutDomain = UserCoreUtil.removeDomainFromName(strParam);
-                    //set name in sql
+                    // set name in sql
                     prepStmt.setString(batchParamIndex + 1, nameWithoutDomain);
                     prepStmt.addBatch();
                 }
@@ -348,8 +387,8 @@ public class DatabaseUtil {
     }
 
     public static void udpateUserRoleMappingWithExactParams(Connection dbConnection, String sqlStmt,
-                                                            String[] roles, String userName,
-                                                            Integer[] tenantIds, int currentTenantId)
+            String[] roles, String userName,
+            Integer[] tenantIds, int currentTenantId)
             throws UserStoreException {
         PreparedStatement ps = null;
         boolean localConnection = false;
@@ -394,7 +433,7 @@ public class DatabaseUtil {
     }
 
     public static void udpateUserRoleMappingInBatchMode(Connection dbConnection, String sqlStmt,
-                                                        Object... params) throws UserStoreException {
+            Object... params) throws UserStoreException {
         PreparedStatement prepStmt = null;
         boolean localConnection = false;
         try {
@@ -451,9 +490,10 @@ public class DatabaseUtil {
                 for (int i = 0; i < params.length; i++) {
                     Object param = params[i];
                     if (param == null) {
-                        //allow to send null data since null allowed values can be in the table. eg: domain name
+                        // allow to send null data since null allowed values can be in the table. eg:
+                        // domain name
                         prepStmt.setString(i + 1, null);
-                        //throw new DashboardUserStoreException("Null data provided.");
+                        // throw new DashboardUserStoreException("Null data provided.");
                     } else if (param instanceof String) {
                         prepStmt.setString(i + 1, (String) param);
                     } else if (param instanceof Integer) {
@@ -475,7 +515,8 @@ public class DatabaseUtil {
             }
             if (e instanceof SQLIntegrityConstraintViolationException) {
                 // Duplicate entry
-                throw new UserStoreException(e.getMessage(), ERROR_CODE_DUPLICATE_WHILE_WRITING_TO_DATABASE.getCode(), e);
+                throw new UserStoreException(e.getMessage(), ERROR_CODE_DUPLICATE_WHILE_WRITING_TO_DATABASE.getCode(),
+                        e);
             } else {
                 // Other SQL Exception
                 throw new UserStoreException(e.getMessage(), e);
@@ -553,7 +594,7 @@ public class DatabaseUtil {
     }
 
     public static void closeAllConnections(Connection dbConnection, ResultSet rs1, ResultSet rs2,
-                                           PreparedStatement... prepStmts) {
+            PreparedStatement... prepStmts) {
         closeResultSet(rs1);
         closeResultSet(rs2);
         closeStatements(prepStmts);

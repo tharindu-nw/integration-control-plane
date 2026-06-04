@@ -21,6 +21,7 @@
         <Configuration>
             <AddAdmin>{{super_admin.create_admin_account}}</AddAdmin>
             <AdminRole>{{super_admin.admin_role}}</AdminRole>
+            <AllowedLoginRoles>{{console_access.allowed_roles}}</AllowedLoginRoles>
             <AdminUser>
                 <UserName>{{super_admin.username}}</UserName>
                 <Password>{{super_admin.password}}</Password>
@@ -59,6 +60,41 @@
             {% endif %}
         </UserStoreManager>
         {% endif %}
+
+        {% set secondary_property_name_map = {
+            'domain_name': 'DomainName',
+            'read_groups': 'ReadGroups',
+            'username': 'userName',
+            'password': 'password',
+            'driver_name': 'driverName',
+            'max_active': 'maxActive',
+            'max_wait': 'maxWait',
+            'connection_url': 'ConnectionURL',
+            'connection_name': 'ConnectionName',
+            'connection_password': 'ConnectionPassword',
+            'user_search_base': 'UserSearchBase',
+            'user_name_attribute': 'UserNameAttribute',
+            'user_name_search_filter': 'UserNameSearchFilter',
+            'user_name_list_filter': 'UserNameListFilter',
+            'group_search_base': 'GroupSearchBase',
+            'group_name_attribute': 'GroupNameAttribute',
+            'group_name_search_filter': 'GroupNameSearchFilter',
+            'group_name_list_filter': 'GroupNameListFilter',
+            'membership_attribute': 'MembershipAttribute',
+            'write_groups': 'WriteGroups',
+            'user_entry_object_class': 'UserEntryObjectClass',
+            'group_entry_object_class': 'GroupEntryObjectClass',
+            'empty_roles_allowed': 'EmptyRolesAllowed'
+        } %}
+        {% for store in secondary_user_store %}
+        <UserStoreManager class="{{store.class}}">
+            {% for property_name, property_value in store.items() %}
+            {% if property_name != 'class' %}
+            <Property name="{{secondary_property_name_map.get(property_name, property_name)}}">{{property_value}}</Property>
+            {% endif %}
+            {% endfor %}
+        </UserStoreManager>
+        {% endfor %}
 
         {% if authorization_manager.class is defined %}
         <AuthorizationManager class="{{authorization_manager.class}}">

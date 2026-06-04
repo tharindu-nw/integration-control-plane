@@ -28,6 +28,7 @@ public final class DataHolder {
     private final static DataHolder instance = new DataHolder();
     private RealmConfiguration realmConfig;
     private UserStoreManager userStoreManager;
+    private String[] allowedLoginRoles = new String[0];
 
     private DataHolder() {
     }
@@ -50,5 +51,13 @@ public final class DataHolder {
 
     public void setUserStoreManager(UserStoreManager userStoreManager) {
         this.userStoreManager = userStoreManager;
+    }
+
+    public String[] getAllowedLoginRoles() {
+        return allowedLoginRoles;
+    }
+
+    public void setAllowedLoginRoles(String[] allowedLoginRoles) {
+        this.allowedLoginRoles = allowedLoginRoles != null ? allowedLoginRoles : new String[0];
     }
 }

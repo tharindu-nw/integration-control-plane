@@ -161,7 +161,9 @@ class IcpRolesDelegate extends RolesDelegate {
     public Ack addRole(AddRoleRequest request) throws UserStoreException {
         UserStoreManager userStoreManager = UserStoreManagerUtils.getUserStoreManager();
         if (request.getRoleName() != null) {
-            String role = request.getRoleName();
+            String role = StringUtils.isEmpty(request.getDomain())
+                    ? request.getRoleName()
+                    : request.getDomain() + Constants.DOMAIN_SEPARATOR + request.getRoleName();
             if (userStoreManager.isExistingRole(role)) {
                 throw new UserStoreException("The role : " + role + " already exists");
             }
@@ -184,17 +186,22 @@ class IcpRolesDelegate extends RolesDelegate {
 
     @Override
     public Ack deleteRole(String roleName, String domain) throws UserStoreException {
-        if (UserStoreManagerUtils.isAdminRole(roleName)) {
+        // Block deletion of the dashboard admin role only when it isn't being targeted via a
+        // secondary-store domain — secondary "admin" groups are independent identities.
+        if (StringUtils.isEmpty(domain) && UserStoreManagerUtils.isAdminRole(roleName)) {
             throw new UserStoreException("Cannot remove the admin role");
         }
+        String qualifiedRoleName = StringUtils.isEmpty(domain)
+                ? roleName
+                : domain + Constants.DOMAIN_SEPARATOR + roleName;
         if (log.isDebugEnabled()) {
-            log.debug("Requested details for the role: " + roleName);
+            log.debug("Requested details for the role: " + qualifiedRoleName);
         }
         UserStoreManager userStoreManager = UserStoreManagerUtils.getUserStoreManager();
-        if (userStoreManager.isExistingRole(roleName)) {
-            userStoreManager.deleteRole(roleName);
+        if (userStoreManager.isExistingRole(qualifiedRoleName)) {
+            userStoreManager.deleteRole(qualifiedRoleName);
         } else {
-            throw new UserStoreException("Role: " + roleName + " cannot be found.");
+            throw new UserStoreException("Role: " + qualifiedRoleName + " cannot be found.");
         }
         return new Ack(Constants.SUCCESS_STATUS);
     }

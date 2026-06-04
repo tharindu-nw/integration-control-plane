@@ -235,7 +235,7 @@ public class FileBasedUserStoreManager extends AbstractUserStoreManager {
 
     @Override
     protected boolean doCheckExistingUser(String userName) {
-        throw new UnsupportedOperationException();
+        return userName != null && userMap != null && userMap.containsKey(userName);
     }
 
     @Override
@@ -402,31 +402,6 @@ public class FileBasedUserStoreManager extends AbstractUserStoreManager {
     @Override
     public String[] getUserList(String s, String s1, String s2) {
         throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public UserStoreManager getSecondaryUserStoreManager() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void setSecondaryUserStoreManager(UserStoreManager userStoreManager) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public UserStoreManager getSecondaryUserStoreManager(String s) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void addSecondaryUserStoreManager(String s, UserStoreManager userStoreManager) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public RealmConfiguration getRealmConfiguration() {
-        return this.realmConfig;
     }
 
     public boolean isAdmin(String username) {

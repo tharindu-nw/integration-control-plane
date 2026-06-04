@@ -216,7 +216,7 @@ public class JDBCUserStoreManager extends AbstractUserStoreManager {
             return false;
         } catch (SQLException e) {
             String message = "Error occurred while retrieving user authentication info for user : " + username;
-            logDebug(message, e);
+            log.error(message, e);
             throw new DashboardUserStoreException("Authentication Failure", e);
         } finally {
             DatabaseUtil.closeAllConnections(connection, resultSet, statement);
@@ -1040,31 +1040,6 @@ public class JDBCUserStoreManager extends AbstractUserStoreManager {
     @Override
     public String[] getUserList(String s, String s1, String s2) {
         throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public UserStoreManager getSecondaryUserStoreManager() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void setSecondaryUserStoreManager(UserStoreManager userStoreManager) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public UserStoreManager getSecondaryUserStoreManager(String s) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void addSecondaryUserStoreManager(String s, UserStoreManager userStoreManager) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public RealmConfiguration getRealmConfiguration() {
-        return realmConfig;
     }
 
     @Override

@@ -21,6 +21,7 @@
 	"super_admin.admin_role": "admin",
 	"super_admin.username": "admin",
 	"super_admin.password": "admin",
+	"console_access.allowed_roles": "",
 	"realm_manager": {
 		"data_source": "WSO2CarbonDB",
 		"properties": {
