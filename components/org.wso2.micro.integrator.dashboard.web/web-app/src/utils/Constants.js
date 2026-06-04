@@ -26,5 +26,9 @@ export const Constants = {
     PREFIX_LOG_CONFIGS: "log-configs",
     PREFIX_LOGS: "logs",
     PREFIX_RESOURCE_TYPE: "resource-type",
-    PREFIX_USER_PASSWORD: "user/password"
+    PREFIX_USER_PASSWORD: "user/password",
+    // Reason passed to the login page when a session can no longer be authenticated.
+    SESSION_EXPIRED: "expired",
+    // Window event dispatched when the identity provider cannot be reached to validate the session.
+    IDP_UNAVAILABLE_EVENT: "icp:idp-unavailable"
 };

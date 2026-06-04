@@ -183,6 +183,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GroupList'
+        # The authentication filter applies to every secured resource; the
+        # responses below are representative of that behaviour for all of them.
+        401:
+          description: "The session is invalid or has expired"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: "The user is authenticated but not permitted to access this resource"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        503:
+          description: "The session could not be validated because the identity provider was unreachable"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
         default:
           description: Unexpected error
           content:
@@ -2781,6 +2801,20 @@ components:
       example:
         code: 401
         message: Unauthorized
+    ForbiddenError:
+      type: object
+      properties:
+        message:
+          type: string
+      example:
+        message: Forbidden
+    ServiceUnavailableError:
+      type: object
+      properties:
+        message:
+          type: string
+      example:
+        message: Unable to validate the session with the identity provider
     Token:
       type: object
       properties:

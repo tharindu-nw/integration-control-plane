@@ -43,8 +43,12 @@ public class SecurityHeaderFilter implements Filter {
             throws IOException, ServletException {
 
         final HttpServletResponse httpResponse = (HttpServletResponse) servletResponse;
-        httpResponse.addHeader("Content-Security-Policy", "frame-ancestors 'none'; object-src 'none';");
-        httpResponse.addHeader("X-Frame-Options", "DENY");
+        // Allow the dashboard to frame its own pages ('self'/SAMEORIGIN) while still blocking framing by other
+        // origins. Same-origin framing is required for the OIDC silent token renewal flow used with web worker
+        // storage: it loads the IdP's prompt=none response in a hidden iframe that navigates to the dashboard's own
+        // SSO redirect page. 'none'/DENY blocks that iframe and breaks session restore on a browser reload.
+        httpResponse.addHeader("Content-Security-Policy", "frame-ancestors 'self'; object-src 'none';");
+        httpResponse.addHeader("X-Frame-Options", "SAMEORIGIN");
         httpResponse.addHeader("X-Content-Type-Options", "nosniff");
         httpResponse.addHeader("Referrer-Policy", "same-origin");
         httpResponse.addHeader("X-XSS-Protection", "1; mode=block");

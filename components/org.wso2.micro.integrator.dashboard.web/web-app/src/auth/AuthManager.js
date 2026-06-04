@@ -92,6 +92,24 @@ export default class AuthManager {
     }
 
     /**
+     * Discard the session and send the user back to the login page.
+     *
+     * This is used when an SSO session can no longer be authenticated, for
+     * example when the refresh token has expired or when the web worker tokens
+     * were lost after a browser reload. SSO API calls bypass the axios
+     * interceptor, so without this the UI would stay stuck on a loading state.
+     *
+     * @param {String} reason : (Optional) reason for the redirect, passed to the
+     *                          login page as the 'session' query parameter so it
+     *                          can explain why the user was signed out.
+     */
+    static redirectToLogin(reason) {
+        AuthManager.discardSession();
+        const query = reason ? '?session=' + encodeURIComponent(reason) : '';
+        window.location.href = (window.contextPath || '') + '/login' + query;
+    }
+
+    /**
      * Delete a browser cookie given its name
      * @param {String} name : Name of the cookie which need to be deleted
      */

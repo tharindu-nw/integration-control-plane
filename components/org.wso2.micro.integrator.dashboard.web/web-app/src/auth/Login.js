@@ -40,6 +40,7 @@ import {useHistory} from "react-router-dom";
 import HTTPClient from '../utils/HTTPClient';
 import { useDispatch } from 'react-redux';
 import { setSuperAdmin } from '../redux/Actions';
+import { Constants } from '../utils/Constants';
 
 const styles = theme => ({
     paper: {
@@ -80,12 +81,17 @@ function Login(props){
     const [authenticated, setAuthenticated] = useState(false);
     const [loginErrorMessage, setLoginErrorMessage] = useState('')
     const [loginError, setLoginError] = useState(false)
+    const [sessionExpired, setSessionExpired] = useState(false)
     const { signIn } = useAuthContext();
     const dispatch = useDispatch();
 
     useEffect(() => {
         fetchCsrfToken();
         initAuthenticationFlow();
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('session') === Constants.SESSION_EXPIRED) {
+            setSessionExpired(true);
+        }
     }, [])
 
     /**
@@ -164,6 +170,14 @@ function Login(props){
                             Sign in
                         </Typography>
                     </Box>
+
+                    {sessionExpired &&
+                    <Box mt={2} className={classes.policyBox}>
+                        <Typography variant="body2" style={{fontSize:13}}>
+                            Your session has expired. Please sign in again.
+                        </Typography>
+                    </Box>
+                    }
 
                     <form className={classes.form} noValidate>
                         <TextField

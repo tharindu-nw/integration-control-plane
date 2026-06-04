@@ -18,14 +18,18 @@
  *
  */
 
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import { Switch, Route, BrowserRouter as Router, Redirect } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { withStyles } from '@material-ui/core/styles';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import Hidden from '@material-ui/core/Hidden';
 import Typography from '@material-ui/core/Typography';
+import Box from '@material-ui/core/Box';
+import CircularProgress from '@material-ui/core/CircularProgress';
+import Snackbar from '@material-ui/core/Snackbar';
 import { useAuthContext } from "@asgardeo/auth-react";
+import { Constants } from '../utils/Constants';
 import Navigator from './layout/Navigator';
 import Content from './layout/Content';
 import Header from './layout/Header';
@@ -101,6 +105,14 @@ function Layout(props) {
     const { signIn } = useAuthContext();
     const dispatch = useDispatch();
 
+    const isSsoUser = AuthManager.getUser()?.sso;
+    const { state, trySignInSilently } = useAuthContext();
+    // For SSO users the session is only confirmed once the Asgardeo SDK holds
+    // valid tokens. Non-SSO users are considered checked from the start.
+    const [ssoSessionChecked, setSsoSessionChecked] = useState(!isSsoUser);
+    const [ssoSessionExpired, setSsoSessionExpired] = useState(false);
+    const [idpUnavailable, setIdpUnavailable] = useState(false);
+
     const handleDrawerToggle = () => {
         setMobileOpen(!mobileOpen);
     };
@@ -112,14 +124,79 @@ function Layout(props) {
         dispatch(setIsRefreshed(true))
     },[])
 
+    // Show a single banner when the identity provider cannot be reached to
+    // validate the session, instead of letting every page fail silently.
+    useEffect(() => {
+        const handler = () => setIdpUnavailable(true);
+        window.addEventListener(Constants.IDP_UNAVAILABLE_EVENT, handler);
+        return () => window.removeEventListener(Constants.IDP_UNAVAILABLE_EVENT, handler);
+    }, [])
+
+    // Reconcile the local session cookie with the Asgardeo session state. With
+    // web worker storage the tokens are lost on a browser reload while the
+    // session cookie survives, which previously left the UI stuck on a loading
+    // screen. Attempt to silently restore the session and fall back to the
+    // login page when it can no longer be authenticated.
+    useEffect(() => {
+        if (!isSsoUser || ssoSessionChecked) {
+            return;
+        }
+        if (state.isAuthenticated) {
+            setSsoSessionChecked(true);
+            return;
+        }
+        if (state.isLoading) {
+            // Wait until the SDK finishes initializing before deciding.
+            return;
+        }
+        let isActive = true;
+        trySignInSilently()
+            .then(response => {
+                if (!isActive) {
+                    return;
+                }
+                if (response) {
+                    setSsoSessionChecked(true);
+                } else {
+                    AuthManager.discardSession();
+                    setSsoSessionExpired(true);
+                }
+            })
+            .catch(() => {
+                if (isActive) {
+                    AuthManager.discardSession();
+                    setSsoSessionExpired(true);
+                }
+            });
+        return () => { isActive = false; };
+    }, [isSsoUser, ssoSessionChecked, state.isAuthenticated, state.isLoading, trySignInSilently]);
+
     // if the user is not logged in Redirect to login
-    if (!AuthManager.isLoggedIn()) {
+    if (!AuthManager.isLoggedIn() || ssoSessionExpired) {
         return (
             <Redirect to={{ pathname: '/login' }} />
         );
     }
 
+    // Hold rendering until the SSO session has been validated/restored so that
+    // child pages do not fire API calls without a valid token.
+    if (!ssoSessionChecked) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+                <CircularProgress />
+            </Box>
+        );
+    }
+
     return (
+        <>
+        <Snackbar
+            open={idpUnavailable}
+            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+            autoHideDuration={10000}
+            onClose={() => setIdpUnavailable(false)}
+            message="Unable to verify your session with the identity provider. Please contact your administrator."
+        />
         <Router>
 
             <div className={classes.root}>
@@ -186,6 +263,7 @@ function Layout(props) {
                 </div>
             </div>
         </Router>
+        </>
     );
 }
 

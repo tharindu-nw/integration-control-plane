@@ -68,21 +68,30 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         }
 
         SSOConfig config = getSsoConfig();
-        if (!securityHandler.isAuthenticated(config, token)) {
-            abortWithUnauthorized(requestContext);
+        try {
+            if (!securityHandler.isAuthenticated(config, token)) {
+                // The token is missing, expired or otherwise invalid: the session is dead.
+                abortWithUnauthorized(requestContext);
+                return;
+            }
+        } catch (TokenValidationException e) {
+            // The token could not be validated because of a server/IdP side failure (e.g. the JWKS or introspection
+            // endpoint is unreachable or untrusted). The session may well be valid, so do not report it as a 401.
+            abortWithServiceUnavailable(requestContext);
             return;
         }
 
         boolean makeNonAdminUsersReadOnly = Boolean.parseBoolean(System.getProperty(MAKE_NON_ADMIN_USERS_READ_ONLY));
         if (isAdminResource(requestContext) && !securityHandler.isAuthorized(config, token)) {
-            abortWithUnauthorized(requestContext);
+            // The user is authenticated but not permitted to access this resource.
+            abortWithForbidden(requestContext);
             return;
         }
         if (!"GET".equalsIgnoreCase(httpMethod) && makeNonAdminUsersReadOnly
                 && !securityHandler.isAuthorized(config, token)) {
             // For non-admin resources, request except GET are blocked
             // if the 'makeNonAdminUsersReadOnly' is set to 'true'
-            abortWithUnauthorized(requestContext);
+            abortWithForbidden(requestContext);
             return;
         }
         String performedBy = extractPerformedBy(token);
@@ -101,11 +110,24 @@ public class AuthenticationFilter implements ContainerRequestFilter {
     }
 
     private void abortWithUnauthorized(ContainerRequestContext requestContext) {
+        abortWith(requestContext, Response.Status.UNAUTHORIZED, "Unauthorized");
+    }
+
+    private void abortWithForbidden(ContainerRequestContext requestContext) {
+        abortWith(requestContext, Response.Status.FORBIDDEN, "Forbidden");
+    }
+
+    private void abortWithServiceUnavailable(ContainerRequestContext requestContext) {
+        abortWith(requestContext, Response.Status.SERVICE_UNAVAILABLE,
+                "Unable to validate the session with the identity provider");
+    }
+
+    private void abortWith(ContainerRequestContext requestContext, Response.Status status, String message) {
         Map<String, String> responseBody = new HashMap<>();
-        responseBody.put("message", "Unauthorized");
-        Response unauthorizedResponse = Response.status(Response.Status.UNAUTHORIZED).entity(responseBody)
+        responseBody.put("message", message);
+        Response response = Response.status(status).entity(responseBody)
                 .header("content-type", "application/json").build();
-        requestContext.abortWith(unauthorizedResponse);
+        requestContext.abortWith(response);
     }
 
     private String extractToken(ContainerRequestContext requestContext) {

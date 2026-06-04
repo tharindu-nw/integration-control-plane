@@ -60,8 +60,34 @@ public class JWTSecurityHandler implements SecurityHandler {
             IDTokenValidator validator = new IDTokenValidator(config.getOidcAgentConfig(), idTokenJWT);
             validator.validate(null);
             return true;
-        } catch (DashboardServerException | ParseException | SSOAgentServerException e) {
+        } catch (SSOAgentServerException e) {
+            if (isCausedByConnectivityFailure(e)) {
+                // The JWKS endpoint could not be reached (e.g. network failure or the IdP TLS certificate is not
+                // trusted by this server's truststore). This is a server/IdP side failure, not an invalid token, so
+                // surface it as such instead of reporting the token as unauthorized.
+                logger.error("Unable to retrieve the JWKS to validate the access token. Verify that the identity "
+                        + "provider's certificate is imported into the dashboard's client-truststore.jks.", e);
+                throw new TokenValidationException("Unable to retrieve the JWKS to validate the access token", e);
+            }
             logger.error("Error validating the access token", e);
+        } catch (DashboardServerException | ParseException e) {
+            logger.error("Error validating the access token", e);
+        }
+        return false;
+    }
+
+    /**
+     * Returns true if the given throwable was caused by a connectivity/TLS failure (an {@link IOException}, which
+     * includes SSL handshake failures). The OIDC SDK reports a failure to retrieve the JWKS as an
+     * {@link SSOAgentServerException} whose cause chain carries the underlying {@link IOException}, which lets us
+     * distinguish "could not reach the IdP to validate" from "the token is invalid".
+     */
+    private boolean isCausedByConnectivityFailure(Throwable throwable) {
+
+        for (Throwable cause = throwable; cause != null; cause = cause.getCause()) {
+            if (cause instanceof IOException) {
+                return true;
+            }
         }
         return false;
     }

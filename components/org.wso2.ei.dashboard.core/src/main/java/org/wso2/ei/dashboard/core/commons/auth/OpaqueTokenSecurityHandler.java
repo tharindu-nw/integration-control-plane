@@ -75,7 +75,12 @@ public class OpaqueTokenSecurityHandler implements SecurityHandler {
                 logger.error("Error validating the token using introspection endpoint. ",
                         httpResponse.getStatusLine().getReasonPhrase());
             }
-        } catch (IOException | DashboardServerException e) {
+        } catch (IOException e) {
+            // The introspection endpoint could not be reached. This is a server/IdP side failure, not an invalid
+            // token, so surface it as such instead of reporting the token as unauthorized.
+            logger.error("Unable to reach the introspection endpoint to validate the token.", e);
+            throw new TokenValidationException("Unable to reach the introspection endpoint to validate the token", e);
+        } catch (DashboardServerException e) {
             logger.error("Error validating the token using introspection endpoint. ", e);
         }
         return false;
